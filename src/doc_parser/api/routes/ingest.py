@@ -53,7 +53,16 @@ async def _run_ingest(
         raise HTTPException(status_code=500, detail=f"Parsing failed: {exc}") from exc
 
     # 2. Chunk
-    chunks = structure_aware_chunking(parse_result, max_chunk_tokens=max_chunk_tokens)
+    chunks = []
+    for page in parse_result.pages:
+        chunks.extend(
+            structure_aware_chunking(
+                page.elements,
+                source_file=pdf_path.name,
+                page=page.page_num,
+                max_chunk_tokens=max_chunk_tokens,
+            )
+        )
     logger.info("Chunked {} → {} chunks", pdf_path.name, len(chunks))
 
     # 3. Caption image chunks (if enabled)

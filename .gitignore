@@ -15,3 +15,9 @@ build/
 data/raw/
 data/processed/
 *.ipynb_checkpoints/
+CLAUDE.md
+uv.lock
+docling_report.pdf
+pp_doclayout_v3_glm_ocr_implementation_plan.md
+output.txt
+.claude/*

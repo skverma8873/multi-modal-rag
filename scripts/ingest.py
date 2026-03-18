@@ -168,7 +168,7 @@ async def main() -> None:
     if not file_paths:
         return
 
-    parser = DocumentParser(settings)
+    parser = DocumentParser()
     store = QdrantDocumentStore(settings)
 
     # Ensure collection exists (or recreate it)

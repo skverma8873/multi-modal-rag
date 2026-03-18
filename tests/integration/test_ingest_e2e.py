@@ -66,12 +66,11 @@ def _sample_pdf() -> Path:
 @pytest.mark.asyncio
 async def test_ingest_e2e_stores_at_least_one_point(_require_api_keys):
     """Parse a real PDF, embed it, upsert to Qdrant, and verify points exist."""
-    from openai import AsyncOpenAI
     from qdrant_client import AsyncQdrantClient
 
     from doc_parser.chunker import structure_aware_chunking
     from doc_parser.config import get_settings
-    from doc_parser.ingestion.embedder import embed_chunks
+    from doc_parser.ingestion.embedder import embed_chunks, get_embedder
     from doc_parser.ingestion.vector_store import QdrantDocumentStore
     from doc_parser.pipeline import DocumentParser
 
@@ -82,7 +81,7 @@ async def test_ingest_e2e_stores_at_least_one_point(_require_api_keys):
     pdf_path = _sample_pdf()
 
     # Parse
-    parser = DocumentParser(settings)
+    parser = DocumentParser()
     parse_result = parser.parse_file(pdf_path)
     assert parse_result.pages, "Parser returned no pages"
 
@@ -98,10 +97,8 @@ async def test_ingest_e2e_stores_at_least_one_point(_require_api_keys):
     assert all_chunks, "No chunks produced"
 
     # Embed (skip image captioning to avoid extra cost in tests)
-    openai_key = settings.openai_api_key.get_secret_value() if settings.openai_api_key else None
-    openai_client = AsyncOpenAI(api_key=openai_key)
-
-    dense, sparse = await embed_chunks(all_chunks, openai_client, settings)
+    embedder = get_embedder(settings)
+    dense, sparse = await embed_chunks(all_chunks, embedder, settings)
     assert len(dense) == len(all_chunks)
     assert len(sparse) == len(all_chunks)
 
@@ -123,12 +120,11 @@ async def test_ingest_e2e_stores_at_least_one_point(_require_api_keys):
 @pytest.mark.asyncio
 async def test_ingest_e2e_search_returns_results(_require_api_keys):
     """After ingestion, a hybrid search query should return at least one result."""
-    from openai import AsyncOpenAI
     from qdrant_client import AsyncQdrantClient
 
     from doc_parser.chunker import structure_aware_chunking
     from doc_parser.config import get_settings
-    from doc_parser.ingestion.embedder import embed_chunks
+    from doc_parser.ingestion.embedder import embed_chunks, get_embedder
     from doc_parser.ingestion.vector_store import QdrantDocumentStore
     from doc_parser.pipeline import DocumentParser
 
@@ -136,7 +132,7 @@ async def test_ingest_e2e_search_returns_results(_require_api_keys):
     settings.__dict__["qdrant_collection_name"] = "test_ingest_e2e_search"
 
     pdf_path = _sample_pdf()
-    parser = DocumentParser(settings)
+    parser = DocumentParser()
     parse_result = parser.parse_file(pdf_path)
 
     all_chunks = []
@@ -149,10 +145,8 @@ async def test_ingest_e2e_search_returns_results(_require_api_keys):
             )
         )
 
-    openai_key = settings.openai_api_key.get_secret_value() if settings.openai_api_key else None
-    openai_client = AsyncOpenAI(api_key=openai_key)
-
-    dense, sparse = await embed_chunks(all_chunks, openai_client, settings)
+    embedder = get_embedder(settings)
+    dense, sparse = await embed_chunks(all_chunks, embedder, settings)
 
     store = QdrantDocumentStore(settings)
     await store.create_collection(overwrite=True)
@@ -160,7 +154,7 @@ async def test_ingest_e2e_search_returns_results(_require_api_keys):
 
     results = await store.search(
         query_text="document",
-        client=openai_client,
+        embedder=embedder,
         settings=settings,
         top_k=5,
     )

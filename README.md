@@ -93,6 +93,7 @@ Optional extras:
 uv pip install -e ".[bge]"    # BAAI/bge-reranker-v2-minicpm-layerwise (local, fast)
 uv pip install -e ".[qwen]"   # Qwen3-VL-Reranker-2B (local, multimodal, heavier)
 uv pip install -e ".[gemini]" # Google Gemini embeddings (gemini-embedding-2-preview)
+uv pip install -e ".[layout]" # PP-DocLayout-V3 local layout detection (Ollama mode)
 ```
 
 ### Step 4 — Configure your API keys
@@ -644,11 +645,15 @@ $$
 
 ## Streamlit Visual Inspector
 
+Two visualizers are available — one for cloud results, one for local Ollama results.
+
+### Cloud API visualizer (`app.py`)
+
 ```bash
 uv run streamlit run app.py
 ```
 
-- **Upload any PDF** and parse it with a single button click
+- **Upload any PDF** and parse it with a single button click (calls Z.AI cloud API)
 - **Page slider** — jump to any page in a multi-page document
 - **Color-coded bounding boxes** — each element category gets its own color (titles red, paragraphs green, tables orange, formulas purple, …)
 - **Legend** — shows only element types present on the current page
@@ -658,6 +663,72 @@ uv run streamlit run app.py
 - **Full document Markdown** — collapsible expander at the bottom
 
 > Bounding boxes are normalized to 0–1000 by the Z.AI API. Pixel formula: `pixel = bbox_value × image_dimension / 1000`.
+
+### Ollama results visualizer (`ollama/visualize.py`)
+
+Reads pre-saved `ollama/output/*_elements.json` files — no API key or running service needed.
+
+```bash
+uv run streamlit run ollama/visualize.py
+```
+
+- **Dropdown** — select any `*_elements.json` from `ollama/output/`
+- **PDF auto-detected** from `data/raw/` by matching filename stem; fallback file uploader if not found
+- **Color-coded bounding boxes** — same color scheme, extended for PP-DocLayoutV3 labels (`doc_title`, `aside_text`, `paragraph_title`, `footnote`, …)
+- **Polygon overlays** — toggle precise polygon outlines (Ollama outputs polygon points in addition to bounding boxes)
+- **Element content** — expandable list with content text, bbox coords, and polygon point count
+- **Full document Markdown** — collapsible expander showing the paired `*.md` file
+
+---
+
+## Ollama / Local Mode (No Cloud API Key)
+
+The `ollama/` folder provides a fully local alternative to the Z.AI cloud pipeline. It runs the same GLM-OCR model and PP-DocLayout-V3 layout detector on your machine via [Ollama](https://ollama.com).
+
+### Prerequisites
+
+```bash
+# 1. Install and start Ollama
+brew install ollama   # macOS; see ollama.com for Linux
+ollama serve          # leave running in a terminal
+
+# 2. Pull the model (~600 MB)
+ollama pull glm-ocr:latest
+
+# 3. Install layout detection dependencies
+uv pip install -e ".[layout]"
+# (downloads PP-DocLayout-V3 weights ~400 MB from HuggingFace on first run)
+```
+
+### Parse a document locally
+
+```bash
+uv run python ollama/test_parse.py data/raw/paper.pdf
+uv run python ollama/test_parse.py data/raw/paper.pdf --show-elements
+```
+
+Output saved to `ollama/output/`:
+- `paper.md` — extracted Markdown
+- `paper_elements.json` — raw per-page element JSON (same `bbox_2d`/`polygon` schema)
+
+### Visualize saved results
+
+```bash
+uv run streamlit run ollama/visualize.py
+```
+
+### Cloud vs Ollama comparison
+
+| | Cloud API (Z.AI) | Ollama (local) |
+|---|---|---|
+| API key required | Yes (`Z_AI_API_KEY`) | No |
+| Cost | API credits | Free |
+| Speed | Fast (cloud GPU) | 5–30s/page (CPU/MPS/CUDA) |
+| Privacy | Data sent to Z.AI | Fully local |
+| Layout detection | PP-DocLayout-V3 | PP-DocLayout-V3 (same) |
+| Element schema | `label`, `text`, `bbox`, `reading_order` | `label`, `content`, `bbox_2d`, `polygon`, `index` |
+
+See `ollama/README.md` for full setup details.
 
 ---
 
@@ -783,7 +854,13 @@ multi-modal-rag/
 │       └── utils/
 │           └── pdf_utils.py    # PyMuPDF helpers
 │
-├── app.py                      # Streamlit visual inspector
+├── app.py                      # Streamlit visual inspector (cloud API results)
+│
+├── ollama/                     # Local GLM-OCR pipeline (no cloud API needed)
+│   ├── config.yaml             # Ollama-specific glmocr SDK config
+│   ├── test_parse.py           # CLI: parse PDF with local Ollama + PP-DocLayout-V3
+│   ├── visualize.py            # Streamlit visualizer for saved Ollama results
+│   └── output/                 # Saved results: *_elements.json + *.md
 │
 ├── scripts/
 │   ├── parse.py                # CLI: PDF → Markdown + JSON + chunks
@@ -989,6 +1066,7 @@ python scripts/serve.py --port 8001  # use a different port
 | Component | Library | Version |
 |-----------|---------|---------|
 | Layout detection + OCR (cloud) | `glmocr` | ≥0.1.0 |
+| Layout detection + OCR (local) | `glmocr[layout]` + Ollama | ≥0.1.0 |
 | PDF → image extraction | `pymupdf` | ≥1.27.2 |
 | Image processing | `Pillow` | ≥12.1.1 |
 | Config management | `pydantic-settings` | ≥2.8.0 |

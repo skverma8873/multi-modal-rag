@@ -97,6 +97,9 @@ def save_chunks(result: ParseResult, output_dir: Path) -> None:
             "bbox": c.bbox,
             "source_file": c.source_file,
             "is_atomic": c.is_atomic,
+            "modality": c.modality,
+            "image_base64": c.image_base64,
+            "caption": c.caption,
         }
         for c in all_chunks
     ]

@@ -33,7 +33,7 @@ async def health() -> HealthResponse:
     openai_status: str
     try:
         await client.embeddings.create(
-            model=settings.openai_embedding_model,
+            model=settings.embedding_model,
             input=["ping"],
             dimensions=8,
         )

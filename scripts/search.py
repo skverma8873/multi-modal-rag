@@ -16,11 +16,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
-from openai import AsyncOpenAI
 from rich.console import Console
 from rich.table import Table
 
 from doc_parser.config import configure_logging, get_settings
+from doc_parser.ingestion.embedder import get_embedder
 from doc_parser.ingestion.vector_store import QdrantDocumentStore
 from doc_parser.retrieval.reranker import get_reranker
 
@@ -119,11 +119,7 @@ async def main() -> None:
 
     top_n = args.top_n if args.top_n is not None else settings.reranker_top_n
 
-    openai_key = (
-        settings.openai_api_key.get_secret_value() if settings.openai_api_key else None
-    )
-    openai_client = AsyncOpenAI(api_key=openai_key)
-
+    embedder = get_embedder(settings)
     store = QdrantDocumentStore(settings)
 
     console.print(f"\n[bold]Query:[/bold] {args.query}")
@@ -137,7 +133,7 @@ async def main() -> None:
     with console.status("[cyan]Retrieving candidates from Qdrant…[/cyan]"):
         candidates = await store.search(
             query_text=args.query,
-            client=openai_client,
+            embedder=embedder,
             settings=settings,
             top_k=args.top_k,
             filter_modality=args.filter_modality,
